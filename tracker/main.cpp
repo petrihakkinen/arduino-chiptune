@@ -1,9 +1,11 @@
 #define _CRT_SECURE_NO_WARNINGS
+#define NOMINMAX
 
 #include <Windows.h>
 #include "Console.h"
-#include "Tracker.h"
 #include "AudioStreamXA2.h"
+#include "../oscillators.h"
+#include "../playroutine.h"
 #include <stdio.h>
 
 const int width = 100;
@@ -15,7 +17,7 @@ const int instrumentEditorY = 6;
 
 Console* g_pConsole = 0;
 
-const char* notes[] = { "C-", "C#", "D-", "D#", "E-", "F-", "F#", "G-", "G#", "A-", "B-", "H-" };
+const char* notes[] = { "C-", "C#", "D-", "D#", "E-", "F-", "F#", "G-", "G#", "A-", "A#", "H-" };
 
 #define EDIT_TRACK		0
 #define EDIT_INSTRUMENT	1
@@ -211,8 +213,20 @@ void editInstrument()
 		drawInstrument();
 		break;
 	}
+}
 
+static int playCounter = 0;
 
+unsigned char audioHandler()
+{
+	playCounter++;
+	if(playCounter == 320)
+	{
+		playroutine();
+		playCounter = 0;
+	}
+
+	return updateOscillators();
 }
 
 int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
@@ -223,11 +237,11 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 	Console console(width, height);
 	g_pConsole = &console;
 
-	AudioStreamXA2 audioStream;
-	audioStream.test();
+	initOscillators();
+	initPlayroutine();
 
-	memset(tracks, 0, sizeof(track));
-	memset(instruments, 0, sizeof(instruments));
+	AudioStreamXA2 audioStream;
+	audioStream.start();
 
 	drawTracks();
 	drawInstrument();

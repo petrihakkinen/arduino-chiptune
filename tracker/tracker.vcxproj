@@ -74,14 +74,18 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\oscillators.cpp" />
+    <ClCompile Include="..\playroutine.cpp" />
     <ClCompile Include="AudioStreamXA2.cpp" />
     <ClCompile Include="Console.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\defs.h" />
+    <ClInclude Include="..\oscillators.h" />
+    <ClInclude Include="..\playroutine.h" />
     <ClInclude Include="AudioStreamXA2.h" />
     <ClInclude Include="Console.h" />
-    <ClInclude Include="Tracker.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
