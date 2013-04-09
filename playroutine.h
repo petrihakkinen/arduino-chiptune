@@ -2,10 +2,13 @@
 #define PLAYROUTINE_H
 
 #include "defs.h"
+#include "oscillators.h"
 
 #define INSTRUMENTS     8
 #define TRACK_LENGTH    32
-#define TRACKS          1
+#define TRACKS          3
+#define CHANNELS		3
+#define SONG_LENGTH		1
 
 // effects
 #define NOEFFECT        0
@@ -32,22 +35,52 @@ struct Instrument {
   //uint8_t  param;           // effect parameter
 };
 
-// Track contains note and instrument data for one channel.
-struct Track {
-  uint8_t   note[TRACK_LENGTH];
-  uint8_t   noteLength[TRACK_LENGTH];
-  uint8_t   instrument[TRACK_LENGTH];
+struct TrackLine
+{
+  uint8_t	note;
+  uint8_t   instrument;	
 };
 
+// Track contains note and instrument data for one channel.
+struct Track {
+  TrackLine lines[TRACK_LENGTH];
+};
+
+// Channel state, updated at 50hz by playroutine
+struct Channel {
+  uint8_t   instrument;   // instrument playing
+  uint8_t   note;         // note playing
+  uint16_t  frequency;    // base frequency of the note adjusted with slide up/down
+  uint8_t   vibratoPhase;
+
+  // TODO: rewrite arpeggio!
+  uint8_t   arpPhase1;
+  uint8_t   arpPhase2;
+};
+
+struct Song {
+  uint8_t   tracks[SONG_LENGTH][3];
+};
+
+extern Channel channel[CHANNELS];
+
 extern Track tracks[TRACKS];
+extern uint8_t trackpos;
+
 extern Instrument instruments[INSTRUMENTS];
+
+extern Song song;
+extern uint8_t songpos;
 
 void initPlayroutine();
 
-// Plays the music. Should be called at 50hz.
+// Plays back the song. Should be called at 50hz.
 void playroutine();
 
+// Updates effects on channels. Should be called at 50hz.
+void updateEffects();
+
 void playNote(uint8_t voice, uint8_t note, uint8_t instrNum);
-void stopNote(uint8_t note);
+void noteOff(uint8_t voice);
 
 #endif

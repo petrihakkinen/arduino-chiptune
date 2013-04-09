@@ -100,3 +100,14 @@ inline void updateEnvelopes() {
     }
   }
 }
+
+void resetOscillators()
+{
+	for(int i = 0; i < OSCILLATORS; i++)
+	{
+		osc[i].phase = 0;
+		osc[i].frequency = 0;
+		osc[i].ctrl = 0;
+	}
+}
+

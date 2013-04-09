@@ -1,6 +1,14 @@
 #ifndef CONSOLE_H
 #define CONSOLE_H
 
+struct InputEvent
+{
+	bool keyDown;
+	int repeatCount;
+	int  key;
+	char charCode;
+};
+
 class Console
 {
 public:
@@ -8,7 +16,7 @@ public:
 	~Console();
 
 	// input
-	int readChar();
+	bool readInput(InputEvent* pEvent);
 
 	// output
 	void setCursorPos(int x, int y);

@@ -35,18 +35,25 @@ Console::~Console()
 	FreeConsole();
 }
 
-int Console::readChar()
+bool Console::readInput(InputEvent* pEvent)
 {
 	INPUT_RECORD rec;
 	DWORD cnt;
 	PeekConsoleInput(m_input, &rec, 1, &cnt);
 	if(cnt == 0)
-		return -1;
+		return false;
 
 	ReadConsoleInput(m_input, &rec, 1, &cnt);
-	if( rec.EventType == KEY_EVENT && rec.Event.KeyEvent.bKeyDown )
-		return rec.Event.KeyEvent.wVirtualKeyCode;
-	return -1;
+	if( rec.EventType == KEY_EVENT )
+	{
+		pEvent->keyDown = rec.Event.KeyEvent.bKeyDown != 0;
+		pEvent->key = rec.Event.KeyEvent.wVirtualKeyCode;
+		pEvent->repeatCount = rec.Event.KeyEvent.wRepeatCount;
+		pEvent->charCode = rec.Event.KeyEvent.uChar.AsciiChar;
+		return true;
+	}
+
+	return false;
 }
 
 void Console::setCursorPos(int x, int y)

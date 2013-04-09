@@ -37,5 +37,6 @@ extern uint16_t noise;	// global noise state
 
 void initOscillators();
 uint8_t updateOscillators();
+void resetOscillators();
 
 #endif

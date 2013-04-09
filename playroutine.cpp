@@ -1,5 +1,4 @@
 #include "playroutine.h"
-#include "oscillators.h"
 
 // frequencies for first 8 octaves (notes C0-B7)
 uint16_t pitches[] = {
@@ -30,27 +29,23 @@ Instrument instruments[INSTRUMENTS] = {
   { 0,0,0,0,0,0,0,0,0,0 },
 };
 
-// Channel state, updated at 50hz by playroutine
-struct Channel {
-  uint8_t   instrument;   // instrument playing
-  uint8_t   note;         // note playing
-  uint16_t  frequency;    // base frequency of the note adjusted with slide up/down
-  uint8_t   vibratoPhase;
-};
 
 Channel channel[OSCILLATORS];
 Track tracks[TRACKS];
 
+Song song;
+uint8_t songpos = 0;
+
 uint8_t trackpos = 0;
 uint8_t trackcounter = 0;
-uint8_t tempo = 10;    // 10 = 150bpm, smaller values = faster tempo
-
-uint8_t effectPhase = 0;
-uint8_t arp = 0;
+uint8_t tempo = 5;    // 10 = 150bpm, smaller values = faster tempo
 
 void initPlayroutine() {
   memset(channel, 0, sizeof(channel));
   memset(tracks, 0, sizeof(tracks));
+  song.tracks[0][0] = 0;
+  song.tracks[0][1] = 1;
+  song.tracks[0][2] = 2;
 }
 
 void playNote(uint8_t voice, uint8_t note, uint8_t instrNum) {
@@ -68,18 +63,21 @@ void playNote(uint8_t voice, uint8_t note, uint8_t instrNum) {
   channel[voice].note = note;
   channel[voice].frequency = freq;
   channel[voice].vibratoPhase = 0;
+  channel[voice].arpPhase1 = 0;
+  channel[voice].arpPhase2 = 0;
   
   // reseed noise
   if(instr->waveform == NOISE)
     noise = 0xACE1;
 }
 
-void stopNote(uint8_t note) {
-  for(int i=0; i<OSCILLATORS; i++) {
-    if(channel[i].note == note) {
-      osc[i].ctrl = 0;
-    }
-  }
+void noteOff(uint8_t voice) {
+  osc[voice].ctrl = 0;
+
+  // in case the oscillator was in attack phase, the amplitude may have been higher than sustain amplitude
+  // with low sustain and long release, this produces odd behavior so we'll clamp oscillator amplitude
+  // to sustain level when note is released
+  osc[voice].amp = min(osc[voice].amp, osc[voice].sustain<<8);
 }
 
 void recordNote(uint8_t voice, uint8_t note, uint8_t instrNum) {
@@ -89,91 +87,12 @@ void recordNote(uint8_t voice, uint8_t note, uint8_t instrNum) {
     tpos = (tpos+1) & (TRACK_LENGTH-1);
     
   Track* tr = &tracks[voice];
-  tr->note[tpos] = note;
-  tr->noteLength[tpos] = 4;
-  tr->instrument[tpos] = instrNum;
-}
-
-void updateEffects() {  // called at 50hz
-  effectPhase++;
-  
-  for(int i=0; i<OSCILLATORS; i++) {
-    Channel* chan = &channel[i];
-    Instrument* instr = &instruments[chan->instrument];
-    
-    uint16_t f = chan->frequency;
-
-    // vibrato
-    uint8_t vibscaler = f>>4; 
-    f += ((sintab[chan->vibratoPhase>>3] * instr->vibratoDepth) >> 5) * vibscaler >> 3;
-    chan->vibratoPhase += instr->vibratoSpeed;
-    
-    // pulse width
-    osc[i].pulseWidth = instr->pulseWidth;
-    instr->pulseWidth += instr->pulseWidthSpeed >> 4;
-    
-    // effect
-    switch(instr->effect) {
-    case SLIDEUP:
-      chan->frequency += 32;
-      break;
-      
-    case SLIDEDOWN:
-      chan->frequency = max((int16_t)chan->frequency - 8, 0);
-      break;
-
-    case ARPEGGIO_MAJOR:
-      // note +0,+4,+7
-      if((effectPhase & 1) == 0)
-        arp = (arp+1) % 3;
-      if(arp == 0)
-        f = pitches[chan->note];
-      if(arp == 1)
-        f = pitches[chan->note+4];
-      if(arp == 2)
-        f = pitches[chan->note+7];
-      break;
-
-    case ARPEGGIO_MINOR:
-      // note +0,+3,+7
-      if((effectPhase & 1) == 0)
-        arp = (arp+1) % 3;
-      if(arp == 0)
-        f = pitches[chan->note];
-      if(arp == 1)
-        f = pitches[chan->note+3];
-      if(arp == 2)
-        f = pitches[chan->note+7];
-      break;
-
-    case ARPEGGIO_DOMINANT_SEVENTH:
-      // note +0,+4,+7,10
-      if((effectPhase & 1) == 0)
-        arp = (arp+1) % 4;
-      if(arp == 0)
-        f = pitches[chan->note];
-      if(arp == 1)
-        f = pitches[chan->note+4];
-      if(arp == 2)
-        f = pitches[chan->note+7];
-      if(arp == 3)
-        f = pitches[chan->note+10];
-      break;
-
-    case ARPEGGIO_OCTAVE:
-      if(effectPhase & 2)
-        f *= 2;  // +1 octave
-      break;      
-    }
-    
-    osc[i].frequency = f;
-  }
+  tr->lines[tpos].note = note;
+  tr->lines[tpos].instrument = instrNum;
 }
 
 // Updates track playback. Called at 50hz.
 void playroutine() {
-  updateEffects();
-
   trackcounter++;
   if(trackcounter < tempo)
     return;
@@ -189,12 +108,15 @@ void playroutine() {
      trackpos = 0; // TODO: start next track
 
   // play note?
-  Track* tr = &tracks[0];  
-  if(tr->noteLength[trackpos] > 0) {
-    // TODO: voice number!
-    playNote(0, tr->note[trackpos], tr->instrument[trackpos]);
-  }
-  
+  for(int i = 0; i < CHANNELS; i++) {
+    Track* tr = &tracks[song.tracks[songpos][i]];
+    uint8_t note = tr->lines[trackpos].note;
+    if(note > 0 && note < 0xff) {
+      playNote(i, note-1, tr->lines[trackpos].instrument);
+    } else if(note == 0xff) {
+      noteOff(i);
+    }
+  }  
 #ifdef ARDUINO
   // flash led 4 times per beat
   if((trackpos & 1) == 0)
@@ -202,4 +124,92 @@ void playroutine() {
   else
     digitalWrite(beatLedPin, LOW); //trackpos & 1 == 0);  
 #endif
+}
+
+void updateEffects() {  // called at 50hz
+  for(int i=0; i<OSCILLATORS; i++) {
+    Channel* chan = &channel[i];
+    Instrument* instr = &instruments[chan->instrument];
+    
+    uint16_t f = chan->frequency;
+
+    // vibrato
+    uint8_t vibscaler = f>>4; 
+    f += ((sintab[chan->vibratoPhase>>3] * instr->vibratoDepth) >> 5) * vibscaler >> 3;
+    chan->vibratoPhase += instr->vibratoSpeed;
+    
+	// pulse width
+    osc[i].pulseWidth += instr->pulseWidthSpeed >> 4;
+
+    // effect
+    switch(instr->effect) {
+    case SLIDEUP:
+      chan->frequency += 32;
+      break;
+      
+    case SLIDEDOWN:
+      chan->frequency = max((int16_t)chan->frequency - 8, 0);
+      break;
+
+    case ARPEGGIO_MAJOR:
+      // note +0,+4,+7
+	  chan->arpPhase1++;
+	  if(chan->arpPhase1 >= 2) {
+		  chan->arpPhase2++;
+		  if(chan->arpPhase2 >= 3)
+			  chan->arpPhase2 = 0;
+		  chan->arpPhase1 = 0;
+	  }
+      if(chan->arpPhase2 == 0)
+        f = pitches[chan->note];
+      if(chan->arpPhase2 == 1)
+        f = pitches[chan->note+4];
+      if(chan->arpPhase2 == 2)
+        f = pitches[chan->note+7];
+      break;
+
+    case ARPEGGIO_MINOR:
+      // note +0,+3,+7
+	  chan->arpPhase1++;
+	  if(chan->arpPhase1 >= 2) {
+		  chan->arpPhase2++;
+		  if(chan->arpPhase2 >= 3)
+			  chan->arpPhase2 = 0;
+		  chan->arpPhase1 = 0;
+	  }
+      if(chan->arpPhase2 == 0)
+        f = pitches[chan->note];
+      if(chan->arpPhase2 == 1)
+        f = pitches[chan->note+3];
+      if(chan->arpPhase2 == 2)
+        f = pitches[chan->note+7];
+      break;
+
+    case ARPEGGIO_DOMINANT_SEVENTH:
+      // note +0,+4,+7,10
+	  chan->arpPhase1++;
+	  if(chan->arpPhase1 >= 2) {
+		  chan->arpPhase2++;
+		  if(chan->arpPhase2 >= 4)
+			  chan->arpPhase2 = 0;
+		  chan->arpPhase1 = 0;
+	  }
+      if(chan->arpPhase2 == 0)
+        f = pitches[chan->note];
+      if(chan->arpPhase2 == 1)
+        f = pitches[chan->note+4];
+      if(chan->arpPhase2 == 2)
+        f = pitches[chan->note+7];
+      if(chan->arpPhase2 == 3)
+        f = pitches[chan->note+10];
+      break;
+
+    case ARPEGGIO_OCTAVE:
+      if(chan->arpPhase1++ & 2)
+        f *= 2;  // +1 octave
+      break;      
+    }
+    
+    osc[i].frequency = f;
+  }
 }
