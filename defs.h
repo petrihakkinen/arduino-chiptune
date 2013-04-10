@@ -13,4 +13,10 @@ typedef unsigned short uint16_t;
 #define max(a,b) ((a)>(b) ? (a) : (b))
 #endif
 
+#ifdef ARDUINO
+#include <Arduino.h>
+#include <stdint.h>
+#include <string.h> // for memset
+#endif
+
 #endif

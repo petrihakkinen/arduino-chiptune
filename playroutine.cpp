@@ -117,13 +117,13 @@ void playroutine() {
       noteOff(i);
     }
   }  
-#ifdef ARDUINO
-  // flash led 4 times per beat
-  if((trackpos & 1) == 0)
-    digitalWrite(beatLedPin, HIGH); //trackpos & 1 == 0);  
-  else
-    digitalWrite(beatLedPin, LOW); //trackpos & 1 == 0);  
-#endif
+// #ifdef ARDUINO
+//   // flash led 4 times per beat
+//   if((trackpos & 1) == 0)
+//     digitalWrite(beatLedPin, HIGH); //trackpos & 1 == 0);  
+//   else
+//     digitalWrite(beatLedPin, LOW); //trackpos & 1 == 0);  
+// #endif
 }
 
 void updateEffects() {  // called at 50hz
