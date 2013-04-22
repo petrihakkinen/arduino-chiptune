@@ -4,13 +4,9 @@
 #include "defs.h"
 #include "oscillators.h"
 
-#define INSTRUMENTS     8
+#define INSTRUMENTS     16
 #define TRACK_LENGTH    32
-#ifdef ARDUINO
 #define TRACKS          32
-#else
-#define TRACKS          255
-#endif
 #define CHANNELS		3
 #define SONG_LENGTH		32
 

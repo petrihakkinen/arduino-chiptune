@@ -34,11 +34,17 @@ public:
 	void writeText(int x, int y, const char* fmt, ...);
 	void writeTextAttributes(int x, int y, WORD attributes);
 
+	void refresh();
+
 private:
-	HANDLE	m_input;
-	HANDLE	m_output;
-	int		m_width;
-	int		m_height;
+	HANDLE		m_input;
+	HANDLE		m_output;
+	int			m_width;
+	int			m_height;
+	CHAR_INFO*	m_pBuffer;
+	int			m_cursorX;
+	int			m_cursorY;
+	int			m_textAttributes;
 };
 
 #endif

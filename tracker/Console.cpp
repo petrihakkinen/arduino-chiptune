@@ -8,6 +8,12 @@ Console::Console(int width, int height)
 {
 	m_width = width;
 	m_height = height;
+	m_cursorX = 0;
+	m_cursorY = 0;
+	m_textAttributes = NormalText;
+
+	m_pBuffer = new CHAR_INFO[width*height];
+	memset(m_pBuffer, 0, sizeof(CHAR_INFO) * width * height);
 
 	AllocConsole();
 	m_input = GetStdHandle(STD_INPUT_HANDLE);
@@ -62,21 +68,35 @@ void Console::showCursor(bool show)
 
 void Console::setCursorPos(int x, int y)
 {
-	COORD pos;
-	pos.X = x;
-	pos.Y = y;
-	SetConsoleCursorPosition(m_output, pos);
+	m_cursorX = x;
+	m_cursorY = y;
 }
 
 void Console::setTextAttributes(WORD attributes)
 {
-	SetConsoleTextAttribute(m_output, attributes);
+	m_textAttributes = attributes;
 }
 
 void Console::writeText(const char* text)
 {
-	DWORD cnt;
-	WriteConsole(m_output, text, strlen(text), &cnt, 0);
+	char ch;
+	while(ch = *text++)
+	{
+		int i = m_cursorY * m_width + m_cursorX;
+
+		if(i >= 0 && i < m_width*m_height)
+		{
+			m_pBuffer[i].Char.AsciiChar = ch;
+			m_pBuffer[i].Attributes = m_textAttributes;
+		}
+
+		m_cursorX++;
+		if(m_cursorX >= m_width)
+		{
+			m_cursorX = 0;
+			m_cursorY++;
+		}
+	}
 }
 
 void Console::writeText(int x, int y, const char* fmt, ...)
@@ -92,9 +112,22 @@ void Console::writeText(int x, int y, const char* fmt, ...)
 
 void Console::writeTextAttributes(int x, int y, WORD attributes)
 {
-	COORD coord;
-	coord.X = x;
-	coord.Y = y;
-	DWORD count; 
-	WriteConsoleOutputAttribute(m_output, &attributes, 1, coord, &count);
+	int i = y * m_width + x;
+	if(i >= 0 && i < m_width*m_height)
+		m_pBuffer[i].Attributes = attributes;
+}
+
+void Console::refresh()
+{
+	COORD pos;
+	pos.X = 0;
+	pos.Y = 0;
+
+	COORD size;
+	size.X = m_width;
+	size.Y = m_height;
+
+	SMALL_RECT region = { 0, 0, m_width-1, m_height-1 };
+
+	WriteConsoleOutput(m_output, m_pBuffer, size, pos, &region);
 }

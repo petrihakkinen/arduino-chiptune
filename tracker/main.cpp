@@ -10,8 +10,8 @@
 
 #define INSTRUMENT_PARAMS	10
 
-const int width = 100;
-const int height = 70;
+const int width = 80;
+const int height = 45;
 const int infoX = 2;
 const int infoY = 2;
 const int songEditorX = 2;
@@ -62,7 +62,8 @@ void drawSong()
 
 	for(int i = 0; i < SONG_LENGTH; i++)
 	{
-		g_pConsole->setTextAttributes(i == songpos ? Console::SelectedText : Console::NormalText);
+		if(playing)
+			g_pConsole->setTextAttributes(i == songpos ? Console::SelectedText : Console::NormalText);
 		g_pConsole->writeText(x, y+i, "%02x %02x %02x", song.tracks[i][0], song.tracks[i][1], song.tracks[i][2]);
 	}
 
@@ -138,7 +139,7 @@ void drawInstrument()
 
 	for(int i = 0; i < 10; i++)
 	{
-		g_pConsole->setTextAttributes(editor == EDIT_INSTRUMENT && instrumentParam == i ? Console::SelectedText : Console::NormalText);
+		//g_pConsole->setTextAttributes(editor == EDIT_INSTRUMENT && instrumentParam == i ? Console::SelectedText : Console::NormalText);
 		switch(i)
 		{
 		case 0: g_pConsole->writeText(x, y+i, "Waveform       %02x %s", instr->waveform, forms[instr->waveform]); break;
@@ -211,6 +212,8 @@ void processInput()
 				songpos = 0;
 				trackpos = 0;
 			}
+			drawSong();
+			drawTracks();
 			break;
 
 		case '/':
@@ -267,6 +270,7 @@ void processInput()
 						t = (t & 0x0f) | (n<<4);
 					else
 						t = (t & 0xf0) | n;
+					t = min(t, TRACKS - 1);
 					songcol = min(songcol + 1, CHANNELS*2-1);
 					drawSong();
 				}
@@ -282,6 +286,7 @@ void processInput()
 						t = (t & 0x0f) | (n<<4);
 					else
 						t = (t & 0xf0) | n;
+					t = min(t, 0x7f);
 					instrumentcol = min(instrumentcol + 1, 1);
 					drawInstrument();
 				}
@@ -297,8 +302,7 @@ void processInput()
 					{
 						tr->lines[trackcursor].note = note;
 						tr->lines[trackcursor].instrument = instrument;
-						if(trackcursor < TRACK_LENGTH)
-							trackcursor++;
+						trackcursor = min(trackcursor + 1, TRACK_LENGTH-1);
 						drawTracks();
 					}
 				}
@@ -313,8 +317,12 @@ void processInput()
 			break;
 
 		case VK_DELETE:
-			tr->lines[trackcursor].note = 0;
-			drawTracks();
+			if(editor == EDIT_TRACK)
+			{
+				tr->lines[trackcursor].note = 0;
+				trackcursor = min(trackcursor + 1, TRACK_LENGTH-1);
+				drawTracks();
+			}
 			break;
 
 		case VK_UP:
@@ -443,6 +451,8 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 			drawSong();
 			drawTracks();
 		}
+
+		g_pConsole->refresh();
 	}
 	return 0;
 }
