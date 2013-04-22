@@ -12,6 +12,14 @@ struct InputEvent
 class Console
 {
 public:
+	enum
+	{
+		NormalText		= FOREGROUND_RED|FOREGROUND_GREEN|FOREGROUND_BLUE,
+		IntenseText		= FOREGROUND_RED|FOREGROUND_GREEN|FOREGROUND_BLUE|FOREGROUND_INTENSITY,
+		SelectedText	= FOREGROUND_RED|FOREGROUND_GREEN|FOREGROUND_BLUE|FOREGROUND_INTENSITY|BACKGROUND_BLUE,
+		InvertedText	= BACKGROUND_RED|BACKGROUND_GREEN|BACKGROUND_BLUE,
+	};
+
 	Console(int width, int height);
 	~Console();
 
@@ -19,9 +27,12 @@ public:
 	bool readInput(InputEvent* pEvent);
 
 	// output
+	void showCursor(bool show);
 	void setCursorPos(int x, int y);
+	void setTextAttributes(WORD attributes);
 	void writeText(const char* text);
 	void writeText(int x, int y, const char* fmt, ...);
+	void writeTextAttributes(int x, int y, WORD attributes);
 
 private:
 	HANDLE	m_input;

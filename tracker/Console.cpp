@@ -16,18 +16,14 @@ Console::Console(int width, int height)
 	// disable line input mode
 	SetConsoleMode(m_input, 0);
 
-	// hide cursor
-	CONSOLE_CURSOR_INFO cursInfo;
-	cursInfo.dwSize = 1;
-	cursInfo.bVisible = 0;
-	SetConsoleCursorInfo(m_output, &cursInfo);
-
 	// resize console
 	COORD size;
 	size.X = width;
 	size.Y = height;
 	SetConsoleScreenBufferSize(m_output, size);
     MoveWindow(GetConsoleWindow(), 100, 100, width*9, height*13, TRUE);
+
+	showCursor(false);
 }
 
 Console::~Console()
@@ -56,12 +52,25 @@ bool Console::readInput(InputEvent* pEvent)
 	return false;
 }
 
+void Console::showCursor(bool show)
+{
+	CONSOLE_CURSOR_INFO cursInfo;
+	cursInfo.dwSize = 3;
+	cursInfo.bVisible = show;
+	SetConsoleCursorInfo(m_output, &cursInfo);
+}
+
 void Console::setCursorPos(int x, int y)
 {
 	COORD pos;
 	pos.X = x;
 	pos.Y = y;
 	SetConsoleCursorPosition(m_output, pos);
+}
+
+void Console::setTextAttributes(WORD attributes)
+{
+	SetConsoleTextAttribute(m_output, attributes);
 }
 
 void Console::writeText(const char* text)
@@ -79,4 +88,13 @@ void Console::writeText(int x, int y, const char* fmt, ...)
 	va_end(args);
 	setCursorPos(x, y);
 	writeText(buf);
+}
+
+void Console::writeTextAttributes(int x, int y, WORD attributes)
+{
+	COORD coord;
+	coord.X = x;
+	coord.Y = y;
+	DWORD count; 
+	WriteConsoleOutputAttribute(m_output, &attributes, 1, coord, &count);
 }

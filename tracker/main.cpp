@@ -12,6 +12,8 @@
 
 const int width = 100;
 const int height = 70;
+const int infoX = 2;
+const int infoY = 2;
 const int songEditorX = 2;
 const int songEditorY = 6;
 const int trackEditorX = 15;
@@ -23,17 +25,32 @@ Console* g_pConsole = 0;
 
 const char* notes[] = { "C-", "C#", "D-", "D#", "E-", "F-", "F#", "G-", "G#", "A-", "A#", "H-" };
 
-#define EDIT_TRACK		0
-#define EDIT_INSTRUMENT	1
+#define EDIT_SONG		0
+#define EDIT_TRACK		1
+#define EDIT_INSTRUMENT	2
 
-int editor = 0;
-int instrument = 0;
-int instrumentParam = 0;
+int editor = EDIT_TRACK;
 int trackcol = 0;
 int trackcursor = 0;
 int transpose = 24;
 bool done = false;
 bool playing = false;
+
+// song editor
+static int songcursor = 0;
+static int songcol = 0;
+
+// instrument editor
+int instrument = 0;
+int instrumentParam = 0;
+int instrumentcol = 0;
+
+void drawInfo()
+{
+	int x = infoX;
+	int y = infoY;
+	g_pConsole->writeText(x, y, "Tempo %02x /*", tempo);
+}
 
 void drawSong()
 {
@@ -44,7 +61,20 @@ void drawSong()
 	y++;
 
 	for(int i = 0; i < SONG_LENGTH; i++)
-		g_pConsole->writeText(x, y++, "%02x %02x %02x", song.tracks[i][0], song.tracks[i][1], song.tracks[i][2]);
+	{
+		g_pConsole->setTextAttributes(i == songpos ? Console::SelectedText : Console::NormalText);
+		g_pConsole->writeText(x, y+i, "%02x %02x %02x", song.tracks[i][0], song.tracks[i][1], song.tracks[i][2]);
+	}
+
+	// cursor pos
+	if(editor == EDIT_SONG)
+	{
+		int col = songcol>>1;
+		int nibble = songcol & 1;
+		g_pConsole->writeTextAttributes(x + col*3 + nibble, y+songcursor, Console::InvertedText);
+	}
+
+	g_pConsole->setTextAttributes(Console::NormalText);
 }
 
 void drawTracks()
@@ -62,26 +92,31 @@ void drawTracks()
 
 		for(int yy=0; yy<TRACK_LENGTH; yy++)
 		{
+			WORD attributes = Console::NormalText;
+			if(playing && trackpos == yy)
+				attributes = Console::SelectedText;
+			if(editor == EDIT_TRACK && trackcol == i && trackcursor == yy)
+				attributes = Console::InvertedText;
+			g_pConsole->setTextAttributes(attributes);
+
 			uint8_t note = tr->lines[yy].note;
 			if(note > 0 && note < 0xff)
 			{
 				note--;
 				const char* name = notes[note % 12];
 				int oct = note / 12;
-				g_pConsole->writeText(x, y+yy, " %s%d %02x", name, oct, tr->lines[yy].instrument);
+				g_pConsole->writeText(x, y+yy, "%s%d %02x", name, oct, tr->lines[yy].instrument);
 			}
 			else if(note == 0xff)
 			{
-				g_pConsole->writeText(x, y+yy, " off --");
+				g_pConsole->writeText(x, y+yy, "off --");
 			}
 			else
 			{
-				g_pConsole->writeText(x, y+yy, " --- --");
+				g_pConsole->writeText(x, y+yy, "--- --");
 			}
+			g_pConsole->setTextAttributes(Console::NormalText);
 		}
-
-		if(editor == EDIT_TRACK && trackcol == i)
-			g_pConsole->writeText(x, y+trackcursor, ">");
 
 		x += 10;
 	}
@@ -95,31 +130,56 @@ void drawInstrument()
 	Instrument* instr = &instruments[instrument];
 
 	const char* forms[] = { "tri  ", "pulse", "saw  ", "noise" };
+
 	instr->waveform &= 3;
 
-	g_pConsole->writeText(x, y++, " Instrument     %02x [/*]", instrument);
+	g_pConsole->writeText(x, y++, "Instrument     %02x <>", instrument);
 	y++;
-	g_pConsole->writeText(x, y++, " Waveform       %02x %s", instr->waveform, forms[instr->waveform]);
-	g_pConsole->writeText(x, y++, " Attack         %02x", instr->attack);
-	g_pConsole->writeText(x, y++, " Decay          %02x", instr->decay);
-	g_pConsole->writeText(x, y++, " Sustain        %02x", instr->sustain);
-	g_pConsole->writeText(x, y++, " Release        %02x", instr->release);
-	g_pConsole->writeText(x, y++, " Pulse Width    %02x", instr->pulseWidth);
-    g_pConsole->writeText(x, y++, " Pulse Speed    %02x", instr->pulseWidthSpeed);
-	g_pConsole->writeText(x, y++, " Vibrato Depth  %02x", instr->vibratoDepth);
-	g_pConsole->writeText(x, y++, " Vibrato Speed  %02x", instr->vibratoSpeed);
-	g_pConsole->writeText(x, y++, " Effect         %02x", instr->effect);
 
+	for(int i = 0; i < 10; i++)
+	{
+		g_pConsole->setTextAttributes(editor == EDIT_INSTRUMENT && instrumentParam == i ? Console::SelectedText : Console::NormalText);
+		switch(i)
+		{
+		case 0: g_pConsole->writeText(x, y+i, "Waveform       %02x %s", instr->waveform, forms[instr->waveform]); break;
+		case 1: g_pConsole->writeText(x, y+i, "Attack         %02x", instr->attack); break;
+		case 2: g_pConsole->writeText(x, y+i, "Decay          %02x", instr->decay); break;
+		case 3: g_pConsole->writeText(x, y+i, "Sustain        %02x", instr->sustain); break;
+		case 4: g_pConsole->writeText(x, y+i, "Release        %02x", instr->release); break;
+		case 5: g_pConsole->writeText(x, y+i, "Pulse Width    %02x", instr->pulseWidth); break;
+		case 6: g_pConsole->writeText(x, y+i, "Pulse Speed    %02x", instr->pulseWidthSpeed); break;
+		case 7: g_pConsole->writeText(x, y+i, "Vibrato Depth  %02x", instr->vibratoDepth); break;
+		case 8: g_pConsole->writeText(x, y+i, "Vibrato Speed  %02x", instr->vibratoSpeed); break;
+		case 9: g_pConsole->writeText(x, y+i, "Effect         %02x", instr->effect); break;
+		}
+	}
+
+	// cursor pos
 	if(editor == EDIT_INSTRUMENT)
-		g_pConsole->writeText(x, instrumentEditorY+instrumentParam+2, ">");
+	{
+		int col = songcol>>1;
+		int nibble = songcol & 1;
+		g_pConsole->writeTextAttributes(x + 15 + instrumentcol, y+instrumentParam, BACKGROUND_RED|BACKGROUND_GREEN|BACKGROUND_BLUE);
+	}
+
+	g_pConsole->setTextAttributes(Console::NormalText);
 }
 
 int keyToNote(int key)
 {
-	const char* keys = "ZSXDCVGBHNJMQ2W3ER5T6Y7UI9O0P";
-	for(size_t i=0; i<strlen(keys); i++)
+	const char* keys = "zsxdcvgbhnjmq2w3er5t6y7ui9o0p";
+	for(size_t i = 0; i < strlen(keys); i++)
 		if(keys[i] == key)
 			return i + transpose;
+	return -1;
+}
+
+int keyToNibble(int key)
+{
+	const char* keys = "0123456789abcdef";
+	for(int i = 0; i < 16; i++)
+		if(keys[i] == key)
+			return i;
 	return -1;
 }
 
@@ -133,20 +193,137 @@ void processInput()
 
 	if(ev.keyDown)
 	{
-		switch(ev.key)
+		switch(ev.charCode)
 		{
-		case VK_TAB:
-			editor = (editor + 1) % 2;
+		case '\t':
+			editor = (editor + 1) % 3;
+			drawSong();
 			drawTracks();
 			drawInstrument();
 			break;
 
+		case ' ':
+			playing = !playing;
+			resetOscillators();
+			if(playing)
+			{
+				// play song
+				songpos = 0;
+				trackpos = 0;
+			}
+			break;
+
+		case '/':
+			tempo = max(tempo-1, 1);
+			drawInfo();
+			break;
+
+		case '*':
+			tempo = tempo+1;
+			drawInfo();
+			break;
+
+		case '<':
+			instrument = max(instrument - 1, 0);
+			drawInstrument();
+			break;
+
+		case '>':
+			instrument = min(instrument + 1, INSTRUMENTS-1);
+			drawInstrument();
+			break;
+
+		case '+':
+			if(editor == EDIT_INSTRUMENT)
+			{
+				uint8_t* params = &instruments[instrument].waveform;
+				params[instrumentParam] = min(params[instrumentParam]+1, 0x7f);
+				drawInstrument();
+			}
+			break;
+
+		case '-':
+			if(editor == EDIT_INSTRUMENT)
+			{
+				uint8_t* params = &instruments[instrument].waveform;
+				params[instrumentParam] = max(params[instrumentParam]-1, 0);
+				drawInstrument();
+			}
+			else if(editor == EDIT_TRACK)
+			{
+				tr->lines[trackcursor].note = 0xff;			// note off
+				drawTracks();
+			}
+			break;
+
+		default:
+			if(editor == EDIT_SONG)
+			{
+				int n = keyToNibble(ev.charCode);
+				if(n >= 0)
+				{
+					uint8_t& t = song.tracks[songcursor][songcol>>1];
+					if((songcol & 1) == 0)
+						t = (t & 0x0f) | (n<<4);
+					else
+						t = (t & 0xf0) | n;
+					songcol = min(songcol + 1, CHANNELS*2-1);
+					drawSong();
+				}
+			}
+			else if(editor == EDIT_INSTRUMENT)
+			{
+				int n = keyToNibble(ev.charCode);
+				if(n >= 0)
+				{
+					uint8_t* params = &instruments[instrument].waveform;
+					uint8_t& t = params[instrumentParam];
+					if((instrumentcol & 1) == 0)
+						t = (t & 0x0f) | (n<<4);
+					else
+						t = (t & 0xf0) | n;
+					instrumentcol = min(instrumentcol + 1, 1);
+					drawInstrument();
+				}
+			}
+			else
+			{
+				int note = keyToNote(ev.charCode);
+				if(note >= 0)
+				{
+					if(channel[0].note != note || osc[0].ctrl == 0)
+						playNote(0, note, instrument);
+					if(editor == EDIT_TRACK)
+					{
+						tr->lines[trackcursor].note = note;
+						tr->lines[trackcursor].instrument = instrument;
+						if(trackcursor < TRACK_LENGTH)
+							trackcursor++;
+						drawTracks();
+					}
+				}
+			}
+			break;
+		}
+
+		switch(ev.key)
+		{
 		case VK_ESCAPE:
 			done = true;
 			break;
 
+		case VK_DELETE:
+			tr->lines[trackcursor].note = 0;
+			drawTracks();
+			break;
+
 		case VK_UP:
-			if(editor == EDIT_TRACK)
+			if(editor == EDIT_SONG)
+			{
+				songcursor = max(songcursor-1, 0);
+				drawSong();
+			}
+			else if(editor == EDIT_TRACK)
 			{
 				trackcursor = max(trackcursor-1, 0);
 				drawTracks();
@@ -159,7 +336,12 @@ void processInput()
 			break;
 
 		case VK_DOWN:
-			if(editor == EDIT_TRACK)
+			if(editor == EDIT_SONG)
+			{
+				songcursor = min(songcursor+1, SONG_LENGTH-1);
+				drawSong();
+			}
+			else if(editor == EDIT_TRACK)
 			{
 				trackcursor = min(trackcursor+1, TRACK_LENGTH-1);
 				drawTracks();
@@ -172,76 +354,39 @@ void processInput()
 			break;
 
 		case VK_LEFT:
-			if(editor == EDIT_TRACK)
+			if(editor == EDIT_SONG)
+			{
+				songcol = max(songcol - 1, 0);
+				drawSong();
+			}
+			else if(editor == EDIT_TRACK)
 			{
 				trackcol = max(trackcol-1, 0);
 				drawTracks();
 			}
 			else if(editor == EDIT_INSTRUMENT)
 			{
-				uint8_t* params = &instruments[instrument].waveform;
-				params[instrumentParam] = max(params[instrumentParam]-1, 0);
+				instrumentcol = max(instrumentcol - 1, 0);
 				drawInstrument();
 			}
 			break;
 
 		case VK_RIGHT:
-			if(editor == EDIT_TRACK)
+			if(editor == EDIT_SONG)
+			{
+				songcol = min(songcol + 1, CHANNELS*2 - 1);
+				drawSong();
+			}
+			else if(editor == EDIT_TRACK)
 			{
 				trackcol = min(trackcol+1, CHANNELS-1);
 				drawTracks();
 			}
 			else if(editor == EDIT_INSTRUMENT)
 			{
-				uint8_t* params = &instruments[instrument].waveform;
-				params[instrumentParam] = min(params[instrumentParam]+1, 0x7f);
+				instrumentcol = min(instrumentcol + 1, 1);
 				drawInstrument();
 			}
-			break;
-
-		case ' ':
-			playing = !playing;
-			resetOscillators();
-			if(playing)
-				trackpos = TRACK_LENGTH-1;
-			break;
-
-		case 111:
-			instrument = max(instrument - 1, 0);
-			drawInstrument();
-			break;
-
-		case 106:
-			instrument = min(instrument + 1, INSTRUMENTS-1);
-			drawInstrument();
-			break;
-
-		case VK_DELETE:
-		case 220:
-			tr->lines[trackcursor].note = 0;
-			drawTracks();
-			break;
-
-		case 189: //'-'
-			// note off
-			if(editor == EDIT_TRACK)
-				tr->lines[trackcursor].note = 0xff;
-			drawTracks();
-			break;
-
-		default:
-			int note = keyToNote(ev.key);
-			if(note >= 0)
-			{
-				if(channel[0].note != note || osc[0].ctrl == 0)
-					playNote(0, note, instrument);
-				if(editor == EDIT_TRACK)
-				{
-					tr->lines[trackcursor].note = note;
-					tr->lines[trackcursor].instrument = instrument;
-					drawTracks();
-				}
-		}
 			break;
 		}
 	}
@@ -283,6 +428,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 	AudioStreamXA2 audioStream;
 	audioStream.start();
 
+	drawInfo();
 	drawSong();
 	drawTracks();
 	drawInstrument();
@@ -294,7 +440,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
 		if(playing)
 		{
-			trackcursor = trackpos;
+			drawSong();
 			drawTracks();
 		}
 	}
