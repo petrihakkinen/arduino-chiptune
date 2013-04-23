@@ -33,6 +33,7 @@ SoftwareSerial debug(0, 1);
 static byte command = 0; // previous midi command
 static uint8_t nextVoice = 0;
 static uint8_t instrument = 0;
+static int queuedNote = 0;
 
 void playNote(byte note)
 {
@@ -97,7 +98,8 @@ void readMIDI()
 			{
 				note -= 24;
 				if(velocity > 0)
-					playNote(note);
+					//playNote(note);
+					queuedNote = note;
 				else
 					stopNote(note);
 			}
@@ -306,8 +308,13 @@ void loop()
 	// update effects
 	if(tickCounter >= 320)
 	{
-		playroutine();
 		updateEffects();
+		if(queuedNote)
+		{
+			playNote(queuedNote);
+			queuedNote = 0;
+		}
+		playroutine();
 		tickCounter = 0;
 	}
 

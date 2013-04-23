@@ -22,7 +22,8 @@ int8_t sintab[] =
 
 Instrument instruments[INSTRUMENTS] =
 {
-	{ 1,113,89,20,16,225,21,0,0,0 },  // bass
+	{ 0,113,89,20,16,225,21,0,0,7 },  // tom
+	//{ 1,113,89,20,16,225,21,0,0,0 },  // bass
 	{ 3,127,40,0,127,0,0,81,76,0 },   // snare
 	{ 1,113,89,20,16,208,21,0,0,3 },  // lead
 	{ 1,22,65,0,127,76,29,31,98,1 },  // fx
@@ -31,7 +32,6 @@ Instrument instruments[INSTRUMENTS] =
 	{ 0,0,0,0,0,0,0,0,0,0 },
 	{ 0,0,0,0,0,0,0,0,0,0 },
 };
-
 
 Channel channel[OSCILLATORS];
 Track tracks[TRACKS];
@@ -58,7 +58,7 @@ void playNote(uint8_t voice, uint8_t note, uint8_t instrNum)
 	uint16_t freq = pitches[note];
 	osc[voice].frequency = freq;
 	osc[voice].ctrl = 1;
-	osc[voice].waveform = instr->waveform;
+	osc[voice].waveform = (instr->effect == DRUM ? NOISE : instr->waveform);
 	osc[voice].attack = instr->attack;
 	osc[voice].decay = instr->decay;
 	osc[voice].sustain = instr->sustain;
@@ -72,8 +72,11 @@ void playNote(uint8_t voice, uint8_t note, uint8_t instrNum)
 	channel[voice].arpPhase2 = 0;
 
 	// reseed noise
-	if(instr->waveform == NOISE)
+	if(instr->waveform == NOISE || instr->effect == DRUM)
+	{
 		noise = 0xACE1;
+		osc[voice].phase = 0;
+	}
 }
 
 void noteOff(uint8_t voice)
@@ -113,7 +116,7 @@ void playroutine()
 
 	// track finished?
 	if(trackpos == TRACK_LENGTH)
-	trackpos = 0; // TODO: start next track
+		trackpos = 0; // TODO: start next track
 
 	// play note?
 	for(int i = 0; i < CHANNELS; i++)
@@ -156,6 +159,10 @@ void updateEffects()
 
 		// pulse width
 		osc[i].pulseWidth += instr->pulseWidthSpeed >> 4;
+		if(osc[i].pulseWidth > 245)
+			osc[i].pulseWidth = 10;
+		if(osc[i].pulseWidth < 10)
+			osc[i].pulseWidth = 245;
 
 		// effect
 		switch(instr->effect)
@@ -227,7 +234,12 @@ void updateEffects()
 		case ARPEGGIO_OCTAVE:
 			if(chan->arpPhase1++ & 2)
 				f *= 2;  // +1 octave
-			break;      
+			break;
+
+		case DRUM:
+			if(chan->arpPhase1++ == 1)
+				osc[i].waveform = instr->waveform;
+			break;
 		}
 
 		osc[i].frequency = f;

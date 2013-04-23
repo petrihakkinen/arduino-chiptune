@@ -7,7 +7,7 @@
 #define INSTRUMENTS     8
 #define TRACK_LENGTH    32
 #define TRACKS          3
-#define CHANNELS		3
+#define CHANNELS		OSCILLATORS
 #define SONG_LENGTH		1
 
 // effects
@@ -18,7 +18,7 @@
 #define ARPEGGIO_MINOR  4
 #define ARPEGGIO_DOMINANT_SEVENTH 5
 #define ARPEGGIO_OCTAVE 6
-//#define DRUM          7    // use noise waveform for first 50hz cycle
+#define DRUM            7    // use noise waveform for first 50hz cycle
 
 // Instrument parameters
 struct Instrument
