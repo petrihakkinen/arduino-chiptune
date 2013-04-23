@@ -4,11 +4,11 @@
 #include "defs.h"
 #include "oscillators.h"
 
-#define INSTRUMENTS     8
+#define INSTRUMENTS     16
 #define TRACK_LENGTH    32
-#define TRACKS          3
+#define TRACKS          32
 #define CHANNELS		OSCILLATORS
-#define SONG_LENGTH		1
+#define SONG_LENGTH		32
 
 // effects
 #define NOEFFECT        0
@@ -63,13 +63,14 @@ struct Channel
 
 struct Song
 {
-	uint8_t   tracks[SONG_LENGTH][3];
+	uint8_t   tracks[SONG_LENGTH][CHANNELS];
 };
 
 extern Channel channel[CHANNELS];
 
 extern Track tracks[TRACKS];
 extern uint8_t trackpos;
+extern uint8_t tempo;
 
 extern Instrument instruments[INSTRUMENTS];
 

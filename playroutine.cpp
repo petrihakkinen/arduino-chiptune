@@ -116,7 +116,12 @@ void playroutine()
 
 	// track finished?
 	if(trackpos == TRACK_LENGTH)
-		trackpos = 0; // TODO: start next track
+	{
+		songpos++;
+		if(songpos == SONG_LENGTH)
+			songpos = 0;
+		trackpos = 0;
+	}
 
 	// play note?
 	for(int i = 0; i < CHANNELS; i++)
