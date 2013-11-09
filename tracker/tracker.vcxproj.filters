@@ -6,6 +6,7 @@
     <ClCompile Include="AudioStreamXA2.cpp" />
     <ClCompile Include="..\oscillators.cpp" />
     <ClCompile Include="..\playroutine.cpp" />
+    <ClCompile Include="io.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Console.h" />
@@ -13,5 +14,6 @@
     <ClInclude Include="..\oscillators.h" />
     <ClInclude Include="..\playroutine.h" />
     <ClInclude Include="..\defs.h" />
+    <ClInclude Include="io.h" />
   </ItemGroup>
 </Project>

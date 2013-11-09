@@ -1,12 +1,17 @@
 #ifndef CONSOLE_H
 #define CONSOLE_H
 
+#define KEYMOD_SHIFT	1
+#define KEYMOD_CTRL		2
+#define KEYMOD_ALT		4
+
 struct InputEvent
 {
 	bool keyDown;
 	int repeatCount;
 	int  key;
 	char charCode;
+	int keyModifiers;
 };
 
 class Console

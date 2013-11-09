@@ -4,7 +4,7 @@
 #include "defs.h"
 
 #define SAMPLE_FREQUENCY     16000
-#define OSCILLATORS          3
+#define OSCILLATORS          4
 
 // waveforms
 #define TRIANGLE 0

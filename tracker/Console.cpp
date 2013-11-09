@@ -1,6 +1,6 @@
 #define _CRT_SECURE_NO_WARNINGS
 
-#include "Windows.h"
+#include <Windows.h>
 #include "Console.h"
 #include <stdio.h>
 
@@ -52,6 +52,13 @@ bool Console::readInput(InputEvent* pEvent)
 		pEvent->key = rec.Event.KeyEvent.wVirtualKeyCode;
 		pEvent->repeatCount = rec.Event.KeyEvent.wRepeatCount;
 		pEvent->charCode = rec.Event.KeyEvent.uChar.AsciiChar;
+		pEvent->keyModifiers = 0;
+		if( rec.Event.KeyEvent.dwControlKeyState & SHIFT_PRESSED )
+			pEvent->keyModifiers |= KEYMOD_SHIFT;
+		if( rec.Event.KeyEvent.dwControlKeyState & (LEFT_CTRL_PRESSED|RIGHT_CTRL_PRESSED) )
+			pEvent->keyModifiers |= KEYMOD_CTRL;
+		if( rec.Event.KeyEvent.dwControlKeyState & (LEFT_ALT_PRESSED|RIGHT_ALT_PRESSED) )
+			pEvent->keyModifiers |= KEYMOD_ALT;
 		return true;
 	}
 

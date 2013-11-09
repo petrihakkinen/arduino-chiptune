@@ -47,9 +47,14 @@ void initPlayroutine()
 {
 	memset(channel, 0, sizeof(channel));
 	memset(tracks, 0, sizeof(tracks));
-	song.tracks[0][0] = 0;
-	song.tracks[0][1] = 1;
-	song.tracks[0][2] = 2;
+	for(int i = 0; i < TRACKS; i++)
+		for(int j = 0; j < TRACK_LENGTH; j++)
+			tracks[i].lines[j].note = 0xff;
+	for(int i = 0; i < CHANNELS; i++)
+		song.tracks[0][i] = i;
+	for(int i = 1; i < SONG_LENGTH; i++)
+		for(int j = 0; j < CHANNELS; j++)
+			song.tracks[i][j] = 0xff;
 }
 
 void playNote(uint8_t voice, uint8_t note, uint8_t instrNum)
@@ -118,7 +123,10 @@ void playroutine()
 	if(trackpos == TRACK_LENGTH)
 	{
 		songpos++;
+		// restart song?
 		if(songpos == SONG_LENGTH)
+			songpos = 0;
+		if(song.tracks[songpos][0] == 0xff)
 			songpos = 0;
 		trackpos = 0;
 	}
@@ -128,11 +136,11 @@ void playroutine()
 	{
 		Track* tr = &tracks[song.tracks[songpos][i]];
 		uint8_t note = tr->lines[trackpos].note;
-		if(note > 0 && note < 0xff)
+		if(note < 0x80)
 		{
-			playNote(i, note-1, tr->lines[trackpos].instrument);
+			playNote(i, note, tr->lines[trackpos].instrument);
 		}
-		else if(note == 0xff)
+		else if(note == 0xfe)
 		{
 			noteOff(i);
 		}

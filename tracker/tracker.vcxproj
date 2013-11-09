@@ -78,6 +78,7 @@
     <ClCompile Include="..\playroutine.cpp" />
     <ClCompile Include="AudioStreamXA2.cpp" />
     <ClCompile Include="Console.cpp" />
+    <ClCompile Include="io.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -86,6 +87,7 @@
     <ClInclude Include="..\playroutine.h" />
     <ClInclude Include="AudioStreamXA2.h" />
     <ClInclude Include="Console.h" />
+    <ClInclude Include="io.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -5,7 +5,7 @@
 #include "oscillators.h"
 
 #define INSTRUMENTS     16
-#define TRACK_LENGTH    32
+#define TRACK_LENGTH    64
 #define TRACKS          32
 #define CHANNELS		OSCILLATORS
 #define SONG_LENGTH		32
