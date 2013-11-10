@@ -6,19 +6,26 @@
 
 #define INSTRUMENTS     16
 #define TRACK_LENGTH    64
-#define TRACKS          32
+#define TRACKS          64
 #define CHANNELS		OSCILLATORS
-#define SONG_LENGTH		32
+#define SONG_LENGTH		64
 
 // effects
 #define NOEFFECT        0
 #define SLIDEUP         1
 #define SLIDEDOWN       2
-#define ARPEGGIO_MAJOR  3
-#define ARPEGGIO_MINOR  4
-#define ARPEGGIO_DOMINANT_SEVENTH 5
-#define ARPEGGIO_OCTAVE 6
-#define DRUM            7    // use noise waveform for first 50hz cycle
+#define ARPEGGIO		3
+#define DRUM            4		// use noise waveform for first 50hz cycle
+#define SLIDE_NOTE		5		// slide to new note
+#define VOLUME_UP		6		// slide volume up by param
+#define VOLUME_DOWN		7		// slide volume down by param
+
+// arpeggios
+#define ARPEGGIO_NONE				0
+#define ARPEGGIO_MAJOR				1
+#define ARPEGGIO_MINOR				2
+#define ARPEGGIO_DOMINANT_SEVENTH	3
+#define ARPEGGIO_OCTAVE				4
 
 // Instrument parameters
 struct Instrument
@@ -32,15 +39,14 @@ struct Instrument
 	uint8_t  pulseWidthSpeed;
 	uint8_t  vibratoDepth;    // 0-127
 	uint8_t  vibratoSpeed;    // 0-127
-	uint8_t  effect;
-	//uint8_t  param;           // effect parameter
 	uint16_t  pulseWidthPhase;
 };
 
 struct TrackLine
 {
 	uint8_t note;
-	uint8_t instrument;	
+	uint8_t instrument;
+	uint8_t	effect;				// upper nibble = effect, lower nibble = param
 };
 
 // Track contains note and instrument data for one channel.
@@ -57,7 +63,9 @@ struct Channel
 	uint16_t  frequency;    // base frequency of the note adjusted with slide up/down
 	uint8_t   vibratoPhase;
 
-	// TODO: rewrite arpeggio!
+	// effects
+	uint8_t	  effect;
+	uint16_t  targetFrequency;	// for slide to effect
 	uint8_t   arpPhase1;
 	uint8_t   arpPhase2;
 };
@@ -80,6 +88,8 @@ extern uint8_t songpos;
 extern bool loopPattern;	// if set loop current pattern (do not advance in song)
 
 void initPlayroutine();
+
+void resetPlayroutine();
 
 // Plays back the song. Should be called at 50hz.
 void playroutine();

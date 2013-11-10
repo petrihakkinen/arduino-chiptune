@@ -22,15 +22,21 @@ int8_t sintab[] =
 
 Instrument instruments[INSTRUMENTS] =
 {
-	{ 0,113,89,20,16,225,21,0,0,7,0 },  // tom
-	//{ 1,113,89,20,16,225,21,0,0,0,0 },  // bass
-	{ 3,127,40,0,127,0,0,81,76,0,0 },   // snare
-	{ 1,113,89,20,16,208,21,0,0,3,0 },  // lead
-	{ 1,22,65,0,127,76,29,31,98,1,0 },  // fx
-	{ 0,0,0,0,0,0,0,0,0,0,0 },
-	{ 0,0,0,0,0,0,0,0,0,0,0 },
-	{ 0,0,0,0,0,0,0,0,0,0,0 },
-	{ 0,0,0,0,0,0,0,0,0,0,0 },
+	{ 1,0x71,0x59,0x14,0x10,0x7f,0x9,0,0,0 },
+	{ 3,127,0x0f,0,127,0,0,81,76,0 },
+	{ 1,113,89,20,16,208,21,0,0,0 },
+	{ 1,22,65,0,127,76,29,31,98,0 },
+	{ 0x01,0x61,0x0d,0x00,0x00,0x7f,0,0,0,0 },
+	{ 0,0,0,0,0,0,0,0,0,0 },
+	{ 0,0,0,0,0,0,0,0,0,0 },
+	{ 0,0,0,0,0,0,0,0,0,0 },
+	{ 0,0,0,0,0,0,0,0,0,0 },
+	{ 0,0,0,0,0,0,0,0,0,0 },
+	{ 0,0,0,0,0,0,0,0,0,0 },
+	{ 0,0,0,0,0,0,0,0,0,0 },
+	{ 0,0,0,0,0,0,0,0,0,0 },
+	{ 0,0,0,0,0,0,0,0,0,0 },
+	{ 0,0,0,0,0,0,0,0,0,0 },
 };
 
 Channel channel[OSCILLATORS];
@@ -59,13 +65,18 @@ void initPlayroutine()
 			song.tracks[i][j] = 0xff;
 }
 
+void resetPlayroutine()
+{
+	memset(channel, 0, sizeof(channel));
+}
+
 void playNote(uint8_t voice, uint8_t note, uint8_t instrNum)
 {
 	Instrument* instr = &instruments[instrNum];
 	uint16_t freq = pitches[note];
 	osc[voice].frequency = freq;
 	osc[voice].ctrl = 1;
-	osc[voice].waveform = (instr->effect == DRUM ? NOISE : instr->waveform);
+	osc[voice].waveform = instr->waveform;
 	osc[voice].attack = instr->attack;
 	osc[voice].decay = instr->decay;
 	osc[voice].sustain = instr->sustain;
@@ -75,12 +86,13 @@ void playNote(uint8_t voice, uint8_t note, uint8_t instrNum)
 	channel[voice].note = note;
 	channel[voice].frequency = freq;
 	channel[voice].vibratoPhase = 0;
+	channel[voice].effect = 0;
 	channel[voice].arpPhase1 = 0;
 	channel[voice].arpPhase2 = 0;
 	instr->pulseWidthPhase = 0;
 
 	// reseed noise
-	if(instr->waveform == NOISE || instr->effect == DRUM)
+	if(instr->waveform == NOISE)
 	{
 		noise = 0xACE1;
 		osc[voice].phase = 0;
@@ -123,13 +135,40 @@ void playroutine()
 	{
 		Track* tr = &tracks[song.tracks[songpos][i]];
 		uint8_t note = tr->lines[trackpos].note;
+		uint8_t effect = tr->lines[trackpos].effect >> 4;
+
 		if(note < 0x80)
 		{
-			playNote(i, note, tr->lines[trackpos].instrument);
+			if(effect != SLIDE_NOTE)
+				playNote(i, note, tr->lines[trackpos].instrument);
 		}
 		else if(note == 0xfe)
 		{
 			noteOff(i);
+		}
+
+		// set channel effect
+		if(effect)
+		{
+			channel[i].effect = tr->lines[trackpos].effect;
+
+			if(effect == SLIDE_NOTE)
+			{
+				if(note < 0x80)
+					channel[i].targetFrequency = pitches[note];
+				else
+					channel[i].effect = 0;	// no note to slide to
+			}
+			else if(effect == DRUM)
+			{
+				noise = 0xACE1;
+				osc[i].waveform = NOISE;
+				osc[i].phase = 0;
+			}
+			else if(effect == VOLUME_DOWN || effect == VOLUME_UP)
+			{
+				osc[i].ctrl = 3;	// manual volume control
+			}
 		}
 	}
 
@@ -190,80 +229,100 @@ void updateEffects()
 		}
 
 		// effect
-		switch(instr->effect)
+		uint8_t effect = chan->effect>>4;
+		uint8_t param = chan->effect & 0xf;
+		switch(effect)
 		{
 		case SLIDEUP:
-			chan->frequency += 32;
+			chan->frequency += param*4;
 			break;
 
 		case SLIDEDOWN:
-			chan->frequency = max((int16_t)chan->frequency - 8, 0);
+			chan->frequency = max((int16_t)chan->frequency - param*4, 0);
 			break;
 
-		case ARPEGGIO_MAJOR:
-			// note +0,+4,+7
-			chan->arpPhase1++;
-			if(chan->arpPhase1 >= 2)
+		case ARPEGGIO:
+			if(param == ARPEGGIO_MAJOR)
 			{
-				chan->arpPhase2++;
-				if(chan->arpPhase2 >= 3)
-					chan->arpPhase2 = 0;
-				chan->arpPhase1 = 0;
+				// note +0,+4,+7
+				chan->arpPhase1++;
+				if(chan->arpPhase1 >= 2)
+				{
+					chan->arpPhase2++;
+					if(chan->arpPhase2 >= 3)
+						chan->arpPhase2 = 0;
+					chan->arpPhase1 = 0;
+				}
+				if(chan->arpPhase2 == 0)
+					f = pitches[chan->note];
+				if(chan->arpPhase2 == 1)
+					f = pitches[chan->note+4];
+				if(chan->arpPhase2 == 2)
+					f = pitches[chan->note+7];
 			}
-			if(chan->arpPhase2 == 0)
-				f = pitches[chan->note];
-			if(chan->arpPhase2 == 1)
-				f = pitches[chan->note+4];
-			if(chan->arpPhase2 == 2)
-				f = pitches[chan->note+7];
-			break;
-
-		case ARPEGGIO_MINOR:
-			// note +0,+3,+7
-			chan->arpPhase1++;
-			if(chan->arpPhase1 >= 2)
+			else if(param == ARPEGGIO_MINOR)
 			{
-				chan->arpPhase2++;
-				if(chan->arpPhase2 >= 3)
-					chan->arpPhase2 = 0;
-				chan->arpPhase1 = 0;
+				// note +0,+3,+7
+				chan->arpPhase1++;
+				if(chan->arpPhase1 >= 2)
+				{
+					chan->arpPhase2++;
+					if(chan->arpPhase2 >= 3)
+						chan->arpPhase2 = 0;
+					chan->arpPhase1 = 0;
+				}
+				if(chan->arpPhase2 == 0)
+					f = pitches[chan->note];
+				if(chan->arpPhase2 == 1)
+					f = pitches[chan->note+3];
+				if(chan->arpPhase2 == 2)
+					f = pitches[chan->note+7];
 			}
-			if(chan->arpPhase2 == 0)
-				f = pitches[chan->note];
-			if(chan->arpPhase2 == 1)
-				f = pitches[chan->note+3];
-			if(chan->arpPhase2 == 2)
-				f = pitches[chan->note+7];
-			break;
-
-		case ARPEGGIO_DOMINANT_SEVENTH:
-			// note +0,+4,+7,10
-			chan->arpPhase1++;
-			if(chan->arpPhase1 >= 2)
+			else if(param == ARPEGGIO_DOMINANT_SEVENTH)
 			{
-				chan->arpPhase2++;
-				if(chan->arpPhase2 >= 4)
-					chan->arpPhase2 = 0;
-				chan->arpPhase1 = 0;
+				// note +0,+4,+7,10
+				chan->arpPhase1++;
+				if(chan->arpPhase1 >= 2)
+				{
+					chan->arpPhase2++;
+					if(chan->arpPhase2 >= 4)
+						chan->arpPhase2 = 0;
+					chan->arpPhase1 = 0;
+				}
+				if(chan->arpPhase2 == 0)
+					f = pitches[chan->note];
+				if(chan->arpPhase2 == 1)
+					f = pitches[chan->note+4];
+				if(chan->arpPhase2 == 2)
+					f = pitches[chan->note+7];
+				if(chan->arpPhase2 == 3)
+					f = pitches[chan->note+10];
 			}
-			if(chan->arpPhase2 == 0)
-				f = pitches[chan->note];
-			if(chan->arpPhase2 == 1)
-				f = pitches[chan->note+4];
-			if(chan->arpPhase2 == 2)
-				f = pitches[chan->note+7];
-			if(chan->arpPhase2 == 3)
-				f = pitches[chan->note+10];
-			break;
-
-		case ARPEGGIO_OCTAVE:
-			if(chan->arpPhase1++ & 2)
-				f *= 2;  // +1 octave
+			else if(param == ARPEGGIO_OCTAVE)
+			{
+				if(chan->arpPhase1++ & 2)
+					f *= 2;  // +1 octave
+			}
 			break;
 
 		case DRUM:
-			if(chan->arpPhase1++ == 1)
+			if(chan->arpPhase1++ == param+1)
 				osc[i].waveform = instr->waveform;
+			break;
+
+		case SLIDE_NOTE:
+			if(chan->targetFrequency > chan->frequency)
+				chan->frequency = min(chan->frequency + param*2, chan->targetFrequency);
+			else if(chan->targetFrequency < chan->frequency)
+				chan->frequency = max(chan->frequency - param*2, chan->targetFrequency);
+			break;
+
+		case VOLUME_DOWN:
+			osc[i].amp = max(osc[i].amp - param*32, 0);
+			break;
+
+		case VOLUME_UP:
+			osc[i].amp = min(osc[i].amp + param*8, 0x7fff);
 			break;
 		}
 

@@ -16,7 +16,7 @@ TODO:
 #include "../playroutine.h"
 #include <stdio.h>
 
-#define INSTRUMENT_PARAMS	10
+#define INSTRUMENT_PARAMS	9
 
 const int width = 80;
 const int height = 75;
@@ -32,6 +32,7 @@ const int instrumentEditorY = 6;
 Console* g_pConsole = 0;
 
 const char* notes[] = { "C-", "C#", "D-", "D#", "E-", "F-", "F#", "G-", "G#", "A-", "A#", "H-" };
+const char* effects = "-SsadpVv";
 
 #define EDIT_SONG		0
 #define EDIT_TRACK		1
@@ -39,10 +40,12 @@ const char* notes[] = { "C-", "C#", "D-", "D#", "E-", "F-", "F#", "G-", "G#", "A
 
 int editor = EDIT_TRACK;
 int trackcol = 0;
+int tracksubcol = 0;	// 0 = note, 1 = instrument, 2 = effect upper nibble, 3 = effect lower nibble
 int trackcursor = 0;
 int transpose = 24;
 bool done = false;
 bool playing = false;
+bool editEffect = false;
 
 // copy-paste block
 int blockStart = -1;
@@ -123,29 +126,54 @@ void drawTracks()
 				attributes = Console::SelectedText;
 			if(editor == EDIT_TRACK && trackcol == i && yy >= min(blockStart, blockEnd) && yy <= max(blockStart, blockEnd))
 				attributes = Console::InvertedText;	// block selection
-			if(editor == EDIT_TRACK && trackcol == i && trackcursor == yy)
+			if(editor == EDIT_TRACK && trackcol == i && trackcursor == yy && !editEffect)
 				attributes = Console::InvertedText; // current line
 			g_pConsole->setTextAttributes(attributes);
 
 			uint8_t note = tr->lines[yy].note;
+			int oct = note / 12;
+
+			char text[16];
+			char tmp[16];
+
+			// note
+			if(note < 0x80)
+				sprintf(text, "%s%d ", notes[note % 12], oct);
+			else if(note == 0xfe)
+				strcpy(text, "off ");
+			else if(note == 0xff)
+				strcpy(text, "--- ");
+			else
+				strcpy(text, "??? ");
+
+			// instrument
 			if(note < 0x80)
 			{
-				const char* name = notes[note % 12];
-				int oct = note / 12;
-				g_pConsole->writeText(x, y+yy, "%s%d %02x", name, oct, tr->lines[yy].instrument);
-			}
-			else if(note == 0xff)
-			{
-				g_pConsole->writeText(x, y+yy, "--- --");
-			}
-			else if(note == 0xfe)
-			{
-				g_pConsole->writeText(x, y+yy, "off --");
+				sprintf(tmp, "%1x ", tr->lines[yy].instrument);
+				strcat(text, tmp);
 			}
 			else
+				strcat(text, "- ");
+
+			// effect
+			uint8_t effect = tr->lines[yy].effect;
+			if(effect != 0)
 			{
-				g_pConsole->writeText(x, y+yy, "??? ??");
+				sprintf(tmp, "%c%1x", effects[effect>>4], effect & 0xf);
+				strcat(text, tmp);
 			}
+			else
+				strcat(text, "--");
+
+			g_pConsole->writeText(x, y+yy, text);
+
+			if(editor == EDIT_TRACK && trackcol == i && trackcursor == yy && editEffect)
+			{
+				int dx[] = { 0, 4, 6, 7 };
+				for(int j = 0; j < (tracksubcol == 0 ? 3 : 1); j++)
+					g_pConsole->writeTextAttributes(x + dx[tracksubcol] + j, y+yy, Console::InvertedText);
+			}
+
 			g_pConsole->setTextAttributes(Console::NormalText);
 		}
 
@@ -167,7 +195,7 @@ void drawInstrument()
 	g_pConsole->writeText(x, y++, "Instrument     %02x <>", instrument);
 	y++;
 
-	for(int i = 0; i < 10; i++)
+	for(int i = 0; i < 9; i++)
 	{
 		if(instrumentcol < 0)
 			g_pConsole->setTextAttributes(editor == EDIT_INSTRUMENT && instrumentParam == i ? Console::SelectedText : Console::NormalText);
@@ -182,7 +210,6 @@ void drawInstrument()
 		case 6: g_pConsole->writeText(x, y+i, "Pulse Speed    %02x", instr->pulseWidthSpeed); break;
 		case 7: g_pConsole->writeText(x, y+i, "Vibrato Depth  %02x", instr->vibratoDepth); break;
 		case 8: g_pConsole->writeText(x, y+i, "Vibrato Speed  %02x", instr->vibratoSpeed); break;
-		case 9: g_pConsole->writeText(x, y+i, "Effect         %02x", instr->effect); break;
 		}
 	}
 
@@ -239,7 +266,11 @@ void erase()
 {
 	Track* tr = &tracks[song.tracks[songpos][trackcol]];
 	for(int i = min(blockStart, blockEnd); i <= max(blockStart, blockEnd); i++)
+	{
 		tr->lines[i].note = 0xff;
+		tr->lines[i].instrument = 0;
+		tr->lines[i].effect = 0;
+	}
 }
 
 void cut()
@@ -284,6 +315,7 @@ void processInput()
 		case ' ':
 			playing = !playing;
 			resetOscillators();
+			resetPlayroutine();
 			if(playing)
 			{
 				if(ev.keyModifiers == KEYMOD_SHIFT)
@@ -351,8 +383,18 @@ void processInput()
 			}
 			else if(editor == EDIT_TRACK)
 			{
-				tr->lines[trackcursor].note = 0xfe;			// note off
-				drawTracks();
+				if(!editEffect || tracksubcol == 0)
+				{
+					tr->lines[trackcursor].note = 0xfe;			// note off
+					if(!editEffect)
+						tr->lines[trackcursor].instrument = 0;
+					drawTracks();
+				}
+				else if(editEffect && tracksubcol == 2)
+				{
+					tr->lines[trackcursor].effect &= 0xf;
+					drawTracks();
+				}
 			}
 			break;
 
@@ -361,6 +403,11 @@ void processInput()
 			{
 				instrumentcol = (instrumentcol <  0 ? 0 : - 1);
 				drawInstrument();
+			}
+			else if(editor == EDIT_TRACK)
+			{
+				editEffect = !editEffect; 
+				drawTracks();
 			}
 			break;
 
@@ -457,21 +504,65 @@ void processInput()
 						}
 					}
 				}
-				else
+				else if(editor == EDIT_TRACK)
 				{
-					int note = keyToNote(ev.charCode);
-					if(note >= 0)
+					if(!editEffect || tracksubcol == 0)
 					{
-						if(channel[0].note != note || osc[0].ctrl == 0)
-							playNote(0, note, instrument);
-						if(editor == EDIT_TRACK)
+						int note = keyToNote(ev.charCode);
+						if(note >= 0)
 						{
+							if(channel[0].note != note || osc[0].ctrl == 0)
+								playNote(0, note, instrument);
 							tr->lines[trackcursor].note = note;
-							tr->lines[trackcursor].instrument = instrument;
+							if(!editEffect)
+							{
+								tr->lines[trackcursor].instrument = instrument;
+								tr->lines[trackcursor].effect = 0;
+							}
 							//trackcursor = min(trackcursor + 1, TRACK_LENGTH-1);
 							drawTracks();
 						}
 					}
+					else if(editEffect)
+					{
+						// edit effect/instrument nibble
+						if(tracksubcol == 2)
+						{
+							// effect
+							int effect = -1;
+							for(int i = 0; i < 16; i++)
+							{
+								if(effects[i] == 0)
+									break;
+								if(effects[i] == ev.charCode)
+									effect = i;
+							}
+							if(effect >= 0)
+								tr->lines[trackcursor].effect = (tr->lines[trackcursor].effect & 0xf) | (effect<<4);
+							drawTracks();
+						}
+						else
+						{
+							int n = keyToNibble(ev.charCode);
+							if(n >= 0)
+							{
+								if(tracksubcol == 1)
+									tr->lines[trackcursor].instrument = n;
+								//else if(tracksubcol == 2)
+								//	tr->lines[trackcursor].effect = (tr->lines[trackcursor].effect & 0xf) | (n<<4);
+								else if(tracksubcol == 3)
+									tr->lines[trackcursor].effect = (tr->lines[trackcursor].effect & 0xf0) | n;
+								drawTracks();
+							}
+						}
+					}
+				}
+				else
+				{
+					int note = keyToNote(ev.charCode);
+					if(note >= 0)
+						if(channel[0].note != note || osc[0].ctrl == 0)
+							playNote(0, note, instrument);
 				}
 			}
 			break;
@@ -525,7 +616,9 @@ void processInput()
 					for( int i = 0; i < CHANNELS; i++ )
 						song.tracks[0][i] = i;
 				songcursor = min(songcursor, getSongLength() - 1);
+				songpos = min(songpos, getSongLength() - 1);
 				drawSong();
+				drawTracks();
 			}
 			else if(editor == EDIT_TRACK)
 			{
@@ -549,6 +642,8 @@ void processInput()
 				else
 				{
 					tr->lines[trackcursor].note = 0xff;
+					tr->lines[trackcursor].instrument = 0;
+					tr->lines[trackcursor].effect = 0;
 					drawTracks();
 				}
 			}
@@ -621,7 +716,19 @@ void processInput()
 			}
 			else if(editor == EDIT_TRACK)
 			{
-				trackcol = (trackcol + CHANNELS - 1) % CHANNELS;
+				if(editEffect)
+				{
+					tracksubcol--;
+					if(tracksubcol < 0)
+					{
+						trackcol = (trackcol + CHANNELS - 1) % CHANNELS;
+						tracksubcol = 2;
+					}
+				}
+				else
+				{
+					trackcol = (trackcol + CHANNELS - 1) % CHANNELS;
+				}
 				drawTracks();
 			}
 			else if(editor == EDIT_INSTRUMENT)
@@ -640,7 +747,19 @@ void processInput()
 			}
 			else if(editor == EDIT_TRACK)
 			{
-				trackcol = (trackcol+1) % CHANNELS;
+				if(editEffect)
+				{
+					tracksubcol++;
+					if(tracksubcol > 3)
+					{
+						trackcol = (trackcol+1) % CHANNELS;
+						tracksubcol = 0;
+					}
+				}
+				else
+				{
+					trackcol = (trackcol+1) % CHANNELS;
+				}
 				drawTracks();
 			}
 			else if(editor == EDIT_INSTRUMENT)

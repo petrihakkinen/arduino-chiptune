@@ -25,7 +25,7 @@ struct Oscillator
 	int8_t    noise;        // current noise value
 
 	// envelope
-	uint8_t   ctrl;         // 0=release, 1=attack, 2=decay
+	uint8_t   ctrl;         // 0=release, 1=attack, 2=decay, 3=manual volume control
 	uint8_t   attack;       // attack rate
 	uint8_t   decay;        // decay rate
 	uint8_t   sustain;      // sustain amplitude in range 0-127

@@ -106,7 +106,7 @@ void updateEnvelopes()
 			amp = max(amp - ((int16_t)osc[i].decay<<8), osc[i].sustain<<8);
 			osc[i].amp = amp;
 		}
-		else
+		else if(osc[i].ctrl == 0)
 		{
 			// release: fade to zero amplitude
 			int16_t amp = osc[i].amp;
