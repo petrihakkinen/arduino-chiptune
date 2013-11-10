@@ -5,8 +5,7 @@
 TODO:
 - export song to header file
 - highlight every 4th pattern row
-- shift-space = start from beginning
-- space = start current pattern, loop current pattern only
+- clean up: combine playroutine and tracker to same project
 */
 
 #include <Windows.h>
@@ -58,6 +57,18 @@ int instrument = 0;
 int instrumentParam = 0;
 int instrumentcol = -1;
 
+int getSongLength()
+{
+	int length = 0;
+	for(int i = 0; i < SONG_LENGTH; i++)
+	{
+		if(song.tracks[i][0] == 0xff)
+			return length;
+		length++;
+	}
+	return SONG_LENGTH;
+}
+
 void drawInfo()
 {
 	int x = infoX;
@@ -75,7 +86,7 @@ void drawSong()
 
 	for(int i = 0; i < SONG_LENGTH; i++)
 	{
-		if(playing)
+		//if(playing)
 			g_pConsole->setTextAttributes(i == songpos ? Console::SelectedText : Console::NormalText);
 		for(int j = 0; j < CHANNELS; j++)
 			g_pConsole->writeText(x + j*3, y+i, "%02x", song.tracks[i][j]);
@@ -275,8 +286,17 @@ void processInput()
 			resetOscillators();
 			if(playing)
 			{
-				// play song
-				songpos = 0;
+				if(ev.keyModifiers == KEYMOD_SHIFT)
+				{
+					// play song from beginning
+					songpos = 0;
+					loopPattern = false;
+				}
+				else
+				{
+					// loop current pattern
+					loopPattern = true;
+				}
 				trackpos = 0;
 			}
 			drawSong();
@@ -469,7 +489,18 @@ void processInput()
 			break;
 
 		case VK_INSERT:
-			if(editor == EDIT_TRACK)
+			if(editor == EDIT_SONG)
+			{
+				// insert new song line
+				if(getSongLength() < SONG_LENGTH-1)
+				{
+					for( int i = SONG_LENGTH - 1; i > songcursor; i-- )
+						for( int j = 0; j < CHANNELS; j++ )
+							song.tracks[i][j] = song.tracks[i-1][j];
+					drawSong();
+				}
+			}
+			else if(editor == EDIT_TRACK)
 			{
 				// push notes down
 				for( int i = TRACK_LENGTH - 1; i > trackcursor; i-- )
@@ -480,7 +511,23 @@ void processInput()
 			break;
 
 		case VK_DELETE:
-			if(editor == EDIT_TRACK)
+			if(editor == EDIT_SONG)
+			{
+				for( int i = songcursor; i < SONG_LENGTH - 1; i++ )
+					for( int j = 0; j < CHANNELS; j++ )
+						song.tracks[i][j] = song.tracks[i+1][j];
+				int length = getSongLength();
+				for( int i = 0; i < CHANNELS; i++ )
+					song.tracks[length][i] = 0xff;
+
+				// last line deleted?
+				if(song.tracks[0][0] == 0xff)
+					for( int i = 0; i < CHANNELS; i++ )
+						song.tracks[0][i] = i;
+				songcursor = min(songcursor, getSongLength() - 1);
+				drawSong();
+			}
+			else if(editor == EDIT_TRACK)
 			{
 				if(blockStart >= 0)
 					erase();
@@ -539,7 +586,7 @@ void processInput()
 		case VK_DOWN:
 			if(editor == EDIT_SONG)
 			{
-				songcursor = min(songcursor+1, SONG_LENGTH-1);
+				songcursor = min(songcursor+1, getSongLength()-1);
 				drawSong();
 			}
 			else if(editor == EDIT_TRACK)
@@ -618,6 +665,18 @@ void processInput()
 				drawTracks();
 			}
 			break;
+
+		case VK_PRIOR:	// page up
+			songpos = max(songpos - 1, 0);
+			drawSong();
+			drawTracks();
+			break;
+
+		case VK_NEXT:	// page down
+			songpos = min(songpos + 1, getSongLength() - 1);
+			drawSong();
+			drawTracks();
+			break;
 		}
 	}
 
@@ -646,6 +705,7 @@ unsigned char audioHandler()
 		if(playing)
 			playroutine();
 		updateEffects();
+		updateEnvelopes();
 		playCounter = 0;
 	}
 	return updateOscillators();

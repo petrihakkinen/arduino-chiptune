@@ -22,15 +22,15 @@ int8_t sintab[] =
 
 Instrument instruments[INSTRUMENTS] =
 {
-	{ 0,113,89,20,16,225,21,0,0,7 },  // tom
-	//{ 1,113,89,20,16,225,21,0,0,0 },  // bass
-	{ 3,127,40,0,127,0,0,81,76,0 },   // snare
-	{ 1,113,89,20,16,208,21,0,0,3 },  // lead
-	{ 1,22,65,0,127,76,29,31,98,1 },  // fx
-	{ 0,0,0,0,0,0,0,0,0,0 },
-	{ 0,0,0,0,0,0,0,0,0,0 },
-	{ 0,0,0,0,0,0,0,0,0,0 },
-	{ 0,0,0,0,0,0,0,0,0,0 },
+	{ 0,113,89,20,16,225,21,0,0,7,0 },  // tom
+	//{ 1,113,89,20,16,225,21,0,0,0,0 },  // bass
+	{ 3,127,40,0,127,0,0,81,76,0,0 },   // snare
+	{ 1,113,89,20,16,208,21,0,0,3,0 },  // lead
+	{ 1,22,65,0,127,76,29,31,98,1,0 },  // fx
+	{ 0,0,0,0,0,0,0,0,0,0,0 },
+	{ 0,0,0,0,0,0,0,0,0,0,0 },
+	{ 0,0,0,0,0,0,0,0,0,0,0 },
+	{ 0,0,0,0,0,0,0,0,0,0,0 },
 };
 
 Channel channel[OSCILLATORS];
@@ -42,6 +42,8 @@ uint8_t songpos = 0;
 uint8_t trackpos = 0;
 uint8_t trackcounter = 0;
 uint8_t tempo = 5;    // 10 = 150bpm, smaller values = faster tempo
+
+bool loopPattern = false;
 
 void initPlayroutine()
 {
@@ -75,6 +77,7 @@ void playNote(uint8_t voice, uint8_t note, uint8_t instrNum)
 	channel[voice].vibratoPhase = 0;
 	channel[voice].arpPhase1 = 0;
 	channel[voice].arpPhase2 = 0;
+	instr->pulseWidthPhase = 0;
 
 	// reseed noise
 	if(instr->waveform == NOISE || instr->effect == DRUM)
@@ -115,23 +118,7 @@ void playroutine()
 
 	// we get here 8 times per beat (1/8th notes)
 
-	// increment track pos
-	trackpos = (trackpos+1);
-	trackcounter = 0;
-
-	// track finished?
-	if(trackpos == TRACK_LENGTH)
-	{
-		songpos++;
-		// restart song?
-		if(songpos == SONG_LENGTH)
-			songpos = 0;
-		if(song.tracks[songpos][0] == 0xff)
-			songpos = 0;
-		trackpos = 0;
-	}
-
-	// play note?
+	// play notes
 	for(int i = 0; i < CHANNELS; i++)
 	{
 		Track* tr = &tracks[song.tracks[songpos][i]];
@@ -144,6 +131,25 @@ void playroutine()
 		{
 			noteOff(i);
 		}
+	}
+
+	// increment track pos
+	trackpos = (trackpos+1);
+	trackcounter = 0;
+
+	// track finished?
+	if(trackpos == TRACK_LENGTH)
+	{
+		if(!loopPattern)
+		{
+			songpos++;
+			// restart song?
+			if(songpos == SONG_LENGTH)
+				songpos = 0;
+			if(song.tracks[songpos][0] == 0xff)
+				songpos = 0;
+		}
+		trackpos = 0;
 	}
 
 // #ifdef ARDUINO
@@ -171,11 +177,17 @@ void updateEffects()
 		chan->vibratoPhase += instr->vibratoSpeed;
 
 		// pulse width
-		osc[i].pulseWidth += instr->pulseWidthSpeed >> 4;
-		if(osc[i].pulseWidth > 245)
-			osc[i].pulseWidth = 10;
-		if(osc[i].pulseWidth < 10)
-			osc[i].pulseWidth = 245;
+		if(instr->pulseWidthSpeed != 0)
+		{
+			instr->pulseWidthPhase += instr->pulseWidthSpeed<<4;
+			uint8_t phase = instr->pulseWidthPhase>>8;
+			if(phase < 128)
+				osc[i].pulseWidth = phase*2;
+			else
+				osc[i].pulseWidth = (255 - phase)*2;
+			// remap pulse width from [0,255] to [10,245]
+			osc[i].pulseWidth = ((osc[i].pulseWidth * (245-10))>>8) + 10;
+		}
 
 		// effect
 		switch(instr->effect)

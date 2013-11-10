@@ -3,7 +3,6 @@
 
 #include "defs.h"
 
-#define SAMPLE_FREQUENCY     16000
 #define OSCILLATORS          4
 
 // waveforms
@@ -38,6 +37,7 @@ extern uint16_t noise;	// global noise state
 
 void initOscillators();
 uint8_t updateOscillators();
+void updateEnvelopes();
 void resetOscillators();
 
 #endif

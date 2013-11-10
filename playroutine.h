@@ -34,6 +34,7 @@ struct Instrument
 	uint8_t  vibratoSpeed;    // 0-127
 	uint8_t  effect;
 	//uint8_t  param;           // effect parameter
+	uint16_t  pulseWidthPhase;
 };
 
 struct TrackLine
@@ -76,6 +77,7 @@ extern Instrument instruments[INSTRUMENTS];
 
 extern Song song;
 extern uint8_t songpos;
+extern bool loopPattern;	// if set loop current pattern (do not advance in song)
 
 void initPlayroutine();
 
